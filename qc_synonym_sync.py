@@ -224,24 +224,6 @@ CATEGORY_FIELDS = {
 }
 
 
-def cap_entries(entries: list, cap: int) -> tuple[list, int]:
-    """Apply `cap` to `entries`. Returns (visible, hidden_count).
-
-    A cap of 0 means no cap; all entries are visible.
-    """
-    if cap == 0 or len(entries) <= cap:
-        return list(entries), 0
-    return list(entries[:cap]), len(entries) - cap
-
-
-def cap_footer(visible: int, total: int) -> str:
-    """One-line italicized footer noting how many entries were hidden."""
-    return (
-        f"_{visible} of {total} shown. "
-        f"Rerun with `--cap-report 0` to see all._"
-    )
-
-
 def synonym_obo_line(literal: str, record: SynonymRecord) -> str:
     """Reconstruct an OBO `synonym:` line from a SynonymRecord."""
     parts: list[str] = [f'"{literal}"', record.scope]
@@ -266,14 +248,13 @@ def fmt_record(r: SynonymRecord, fields: list[str]) -> str:
 STDOUT_DETAIL_CAP = 10
 
 
-def build_markdown(
+def build_summary_markdown(
     label: str,
     non_synonym_changes: list[str],
     violations: list[Violation],
     modifications: dict[str, list[Modification]],
-    term_labels: dict[str, str],
-    cap_report: int,
 ) -> str:
+    """Pass/fail status and category counts only — no per-entry listings."""
     out = []
     out.append("# Synonym sync QC report")
     out.append("")
@@ -297,48 +278,6 @@ def build_markdown(
         f"- **Number of modifications on existing synonyms**: {n_modifications}",
         "",
     ]
-
-    out.append("## Pass 1: non-synonym line changes")
-    out.append("")
-    if not non_synonym_changes:
-        out.append("No non-synonym lines changed.")
-    else:
-        visible, hidden = cap_entries(non_synonym_changes, cap_report)
-        out.append("<details>")
-        out.append(f"<summary>Show {len(non_synonym_changes)} lines</summary>")
-        out.append("")
-        out.append("```diff")
-        out.extend(visible)
-        out.append("```")
-        if hidden:
-            out.append("")
-            out.append(cap_footer(len(visible), len(non_synonym_changes)))
-        out.append("")
-        out.append("</details>")
-    out.append("")
-
-    out.append("## Pass 2: synonym additions and deletions")
-    out.append("")
-    if not violations:
-        out.append("No synonyms were added or removed.")
-    else:
-        visible, hidden = cap_entries(violations, cap_report)
-        out.append("<details>")
-        out.append(f"<summary>Show {len(violations)} entries</summary>")
-        out.append("")
-        out.append("| Action | Term | Label | Synonym |")
-        out.append("|---|---|---|---|")
-        for cat, key, _ in visible:
-            term, lit = key
-            out.append(
-                f"| {cat} | `{term}` | {term_labels.get(term, '')} | {lit} |"
-            )
-        if hidden:
-            out.append("")
-            out.append(cap_footer(len(visible), len(violations)))
-        out.append("")
-        out.append("</details>")
-    out.append("")
 
     out.append("## Modifications by category")
     out.append("")
@@ -364,15 +303,62 @@ def build_markdown(
             out.append(f"| `{pfx}` | {added.get(pfx, 0)} | {dropped.get(pfx, 0)} |")
         out.append("")
 
+    return "\n".join(out)
+
+
+def build_report_markdown(
+    label: str,
+    non_synonym_changes: list[str],
+    violations: list[Violation],
+    modifications: dict[str, list[Modification]],
+    term_labels: dict[str, str],
+) -> str:
+    """Full report: summary plus per-entry listings for every section."""
+    out = [
+        build_summary_markdown(label, non_synonym_changes, violations, modifications),
+        "## Pass 1: non-synonym line changes",
+        "",
+    ]
+    if not non_synonym_changes:
+        out.append("No non-synonym lines changed.")
+    else:
+        out.append("<details>")
+        out.append(f"<summary>Show {len(non_synonym_changes)} lines</summary>")
+        out.append("")
+        out.append("```diff")
+        out.extend(non_synonym_changes)
+        out.append("```")
+        out.append("")
+        out.append("</details>")
+    out.append("")
+
+    out.append("## Pass 2: synonym additions and deletions")
+    out.append("")
+    if not violations:
+        out.append("No synonyms were added or removed.")
+    else:
+        out.append("<details>")
+        out.append(f"<summary>Show {len(violations)} entries</summary>")
+        out.append("")
+        out.append("| Action | Term | Label | Synonym |")
+        out.append("|---|---|---|---|")
+        for cat, key, _ in violations:
+            term, lit = key
+            out.append(
+                f"| {cat} | `{term}` | {term_labels.get(term, '')} | {lit} |"
+            )
+        out.append("")
+        out.append("</details>")
+    out.append("")
+
     for cat, fields in CATEGORY_FIELDS.items():
         entries = modifications.get(cat, [])
         if not entries:
             continue
-        visible, hidden = cap_entries(entries, cap_report)
         out.append("<details>")
         out.append(f"<summary>{cat} ({len(entries)})</summary>")
         out.append("")
-        for key, a, b in visible:
+        for key, a, b in entries:
             term, lit = key
             out.append(f"**`{term}`** _{term_labels.get(term, '')}_")
             out.append(f"- `{synonym_obo_line(lit, b)}`")
@@ -381,9 +367,6 @@ def build_markdown(
             out.append(f"- {fmt_record(a, fields)}")
             out.append(f"+ {fmt_record(b, fields)}")
             out.append("```")
-            out.append("")
-        if hidden:
-            out.append(cap_footer(len(visible), len(entries)))
             out.append("")
         out.append("</details>")
         out.append("")
@@ -399,14 +382,14 @@ def build_markdown(
     "--report",
     metavar="PATH",
     type=click.Path(dir_okay=False, writable=True),
-    help="write a full markdown report to PATH (stdout still shows the summary)",
+    help="write the full markdown report (status + per-entry listings) to PATH",
 )
 @click.option(
-    "--cap-report",
-    type=int,
-    default=30,
-    show_default=True,
-    help="maximum entries per section in the markdown report; 0 = no cap",
+    "-s",
+    "--summary",
+    metavar="PATH",
+    type=click.Path(dir_okay=False, writable=True),
+    help="write a markdown summary (status + category counts only) to PATH",
 )
 @click.option(
     "--ref",
@@ -417,7 +400,7 @@ def main(
     file_a: str,
     file_b: str | None,
     report: str | None,
-    cap_report: int,
+    summary: str | None,
     ref: str | None,
 ) -> None:
     if ref is not None and file_b is not None:
@@ -495,12 +478,22 @@ def main(
         for pfx in all_prefixes:
             print(f"  {pfx:30s} {added.get(pfx, 0):>8d} {dropped.get(pfx, 0):>8d}")
 
+    if summary:
+        with open(summary, "w") as f:
+            f.write(
+                build_summary_markdown(
+                    label, non_synonym_changes, violations, modifications,
+                )
+            )
+        print()
+        print(f"Markdown summary written to {summary}")
+
     if report:
         with open(report, "w") as f:
             f.write(
-                build_markdown(
+                build_report_markdown(
                     label, non_synonym_changes, violations, modifications,
-                    post_labels, cap_report,
+                    post_labels,
                 )
             )
         print()
