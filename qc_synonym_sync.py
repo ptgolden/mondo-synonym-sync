@@ -16,6 +16,9 @@ Usage:
   # compare a file with local changes to its HEAD version in git
   qc_synonym_sync.py [-r PATH] FILE
 
+  # compare a file as committed at REF vs its parent (REF~1)
+  qc_synonym_sync.py [-r PATH] --ref REF FILE
+
   # compare two files directly
   qc_synonym_sync.py [-r PATH] PRE_FILE POST_FILE
 
@@ -73,8 +76,8 @@ Violation: TypeAlias = tuple[Literal["added", "deleted"], SynonymKey, SynonymRec
 Modification: TypeAlias = tuple[SynonymKey, SynonymRecord, SynonymRecord]
 
 
-def materialize_head_version(path: str) -> str:
-    """Write `git show HEAD:path` to a tempfile and return its path.
+def materialize_at_ref(path: str, ref: str) -> str:
+    """Write `git show {ref}:{path}` to a tempfile and return its path.
 
     Resolves `path` to a repo-root-relative path via `git ls-files
     --full-name` so the script works regardless of the current working
@@ -90,14 +93,15 @@ def materialize_head_version(path: str) -> str:
     repo_relative_path = ls.stdout.strip()
 
     r = subprocess.run(
-        ["git", "show", f"HEAD:{repo_relative_path}"],
+        ["git", "show", f"{ref}:{repo_relative_path}"],
         capture_output=True,
         text=True,
     )
     if r.returncode != 0:
-        sys.exit(f"git show HEAD:{repo_relative_path} failed: {r.stderr.strip()}")
+        sys.exit(f"git show {ref}:{repo_relative_path} failed: {r.stderr.strip()}")
+    safe_ref = ref.replace("/", "-").replace("~", "-").replace("^", "-")
     tmp = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".obo", delete=False, prefix="qc-syn-head-"
+        mode="w", suffix=".obo", delete=False, prefix=f"qc-syn-{safe_ref}-"
     )
     tmp.write(r.stdout)
     tmp.close()
@@ -404,11 +408,27 @@ def build_markdown(
     show_default=True,
     help="maximum entries per section in the markdown report; 0 = no cap",
 )
+@click.option(
+    "--ref",
+    metavar="REF",
+    help="compare REF:FILE_A vs REF~1:FILE_A (single-file mode only)",
+)
 def main(
-    file_a: str, file_b: str | None, report: str | None, cap_report: int
+    file_a: str,
+    file_b: str | None,
+    report: str | None,
+    cap_report: int,
+    ref: str | None,
 ) -> None:
-    if file_b is None:
-        pre_path = materialize_head_version(file_a)
+    if ref is not None and file_b is not None:
+        sys.exit("--ref cannot be combined with two file arguments")
+
+    if ref is not None:
+        pre_path = materialize_at_ref(file_a, f"{ref}~1")
+        post_path = materialize_at_ref(file_a, ref)
+        label = f"{ref}~1:{file_a} -> {ref}:{file_a}"
+    elif file_b is None:
+        pre_path = materialize_at_ref(file_a, "HEAD")
         post_path = file_a
         label = f"HEAD:{file_a} -> {file_a}"
     else:
