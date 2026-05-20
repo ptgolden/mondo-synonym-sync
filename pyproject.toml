@@ -1,0 +1,16 @@
+[project]
+name = "mondo-synonym-sync"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "click>=8.4.0",
+    "curies>=0.13.11",
+    "fastobo==0.13",
+    "pytest>=9.0.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
