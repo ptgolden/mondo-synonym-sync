@@ -2,7 +2,7 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from qc_synonym_sync import (
+from synonym_sync_qc import (
     SynonymKey,
     SynonymRecord,
     extract_synonyms,

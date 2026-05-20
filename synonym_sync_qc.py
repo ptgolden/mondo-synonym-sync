@@ -14,13 +14,13 @@ Verifies two invariants between a pre-sync and post-sync OBO file:
 
 Usage:
   # compare a file with local changes to its HEAD version in git
-  qc_synonym_sync.py [-r PATH] FILE
+  synonym_sync_qc.py [-r PATH] FILE
 
   # compare a file as committed at REF vs its parent (REF~1)
-  qc_synonym_sync.py [-r PATH] --ref REF FILE
+  synonym_sync_qc.py [-r PATH] --ref REF FILE
 
   # compare two files directly
-  qc_synonym_sync.py [-r PATH] PRE_FILE POST_FILE
+  synonym_sync_qc.py [-r PATH] PRE_FILE POST_FILE
 
 Exit status: 0 if both checks pass, 1 if not.
 """

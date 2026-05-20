@@ -1,0 +1,1 @@
+../../synonym_sync_qc.py
