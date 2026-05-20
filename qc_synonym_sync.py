@@ -220,6 +220,24 @@ CATEGORY_FIELDS = {
 }
 
 
+def cap_entries(entries: list, cap: int) -> tuple[list, int]:
+    """Apply `cap` to `entries`. Returns (visible, hidden_count).
+
+    A cap of 0 means no cap; all entries are visible.
+    """
+    if cap == 0 or len(entries) <= cap:
+        return list(entries), 0
+    return list(entries[:cap]), len(entries) - cap
+
+
+def cap_footer(visible: int, total: int) -> str:
+    """One-line italicized footer noting how many entries were hidden."""
+    return (
+        f"_{visible} of {total} shown. "
+        f"Rerun with `--cap-report 0` to see all._"
+    )
+
+
 def synonym_obo_line(literal: str, record: SynonymRecord) -> str:
     """Reconstruct an OBO `synonym:` line from a SynonymRecord."""
     parts: list[str] = [f'"{literal}"', record.scope]
@@ -250,6 +268,7 @@ def build_markdown(
     violations: list[Violation],
     modifications: dict[str, list[Modification]],
     term_labels: dict[str, str],
+    cap_report: int,
 ) -> str:
     out = []
     out.append("# Synonym sync QC report")
@@ -280,9 +299,18 @@ def build_markdown(
     if not non_synonym_changes:
         out.append("No non-synonym lines changed.")
     else:
+        visible, hidden = cap_entries(non_synonym_changes, cap_report)
+        out.append("<details>")
+        out.append(f"<summary>Show {len(non_synonym_changes)} lines</summary>")
+        out.append("")
         out.append("```diff")
-        out.extend(non_synonym_changes)
+        out.extend(visible)
         out.append("```")
+        if hidden:
+            out.append("")
+            out.append(cap_footer(len(visible), len(non_synonym_changes)))
+        out.append("")
+        out.append("</details>")
     out.append("")
 
     out.append("## Pass 2: synonym additions and deletions")
@@ -290,13 +318,22 @@ def build_markdown(
     if not violations:
         out.append("No synonyms were added or removed.")
     else:
+        visible, hidden = cap_entries(violations, cap_report)
+        out.append("<details>")
+        out.append(f"<summary>Show {len(violations)} entries</summary>")
+        out.append("")
         out.append("| Action | Term | Label | Synonym |")
         out.append("|---|---|---|---|")
-        for cat, key, _ in violations:
+        for cat, key, _ in visible:
             term, lit = key
             out.append(
                 f"| {cat} | `{term}` | {term_labels.get(term, '')} | {lit} |"
             )
+        if hidden:
+            out.append("")
+            out.append(cap_footer(len(visible), len(violations)))
+        out.append("")
+        out.append("</details>")
     out.append("")
 
     out.append("## Modifications by category")
@@ -327,9 +364,11 @@ def build_markdown(
         entries = modifications.get(cat, [])
         if not entries:
             continue
-        out.append(f"## {cat} ({len(entries)})")
+        visible, hidden = cap_entries(entries, cap_report)
+        out.append("<details>")
+        out.append(f"<summary>{cat} ({len(entries)})</summary>")
         out.append("")
-        for key, a, b in entries:
+        for key, a, b in visible:
             term, lit = key
             out.append(f"**`{term}`** _{term_labels.get(term, '')}_")
             out.append(f"- `{synonym_obo_line(lit, b)}`")
@@ -339,6 +378,11 @@ def build_markdown(
             out.append(f"+ {fmt_record(b, fields)}")
             out.append("```")
             out.append("")
+        if hidden:
+            out.append(cap_footer(len(visible), len(entries)))
+            out.append("")
+        out.append("</details>")
+        out.append("")
 
     return "\n".join(out)
 
@@ -353,7 +397,16 @@ def build_markdown(
     type=click.Path(dir_okay=False, writable=True),
     help="write a full markdown report to PATH (stdout still shows the summary)",
 )
-def main(file_a: str, file_b: str | None, report: str | None) -> None:
+@click.option(
+    "--cap-report",
+    type=int,
+    default=30,
+    show_default=True,
+    help="maximum entries per section in the markdown report; 0 = no cap",
+)
+def main(
+    file_a: str, file_b: str | None, report: str | None, cap_report: int
+) -> None:
     if file_b is None:
         pre_path = materialize_head_version(file_a)
         post_path = file_a
@@ -427,7 +480,7 @@ def main(file_a: str, file_b: str | None, report: str | None) -> None:
             f.write(
                 build_markdown(
                     label, non_synonym_changes, violations, modifications,
-                    post_labels,
+                    post_labels, cap_report,
                 )
             )
         print()
