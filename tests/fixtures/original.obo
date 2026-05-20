@@ -1,0 +1,22 @@
+format-version: 1.2
+ontology: mondo-test
+
+synonymtypedef: ABBREVIATION "abbreviation"
+
+[Term]
+id: MONDO:0000001
+name: alpha disease
+def: "alpha disease description" [PMID:1]
+synonym: "alpha syn" EXACT [DOID:1, NCIT:C1]
+
+[Term]
+id: MONDO:0000002
+name: beta disease
+def: "beta disease description" [PMID:2]
+synonym: "beta syn" EXACT ABBREVIATION [OMIM:2]
+
+[Term]
+id: MONDO:0000003
+name: gamma disease
+def: "gamma disease description" [PMID:3]
+synonym: "gamma syn" RELATED [Orphanet:3]
