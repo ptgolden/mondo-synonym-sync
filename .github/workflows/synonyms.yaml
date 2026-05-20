@@ -47,5 +47,5 @@ jobs:
           body-path: src/ontology/tmp/synonym-sync-summary.md
           title: "Monthly confirmed synonyms evidence update"
           branch: "confirmed_synonyms_evidence"
-          token: ${{ secrets.GH_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
           #reviewers: "sabrinatoro"
