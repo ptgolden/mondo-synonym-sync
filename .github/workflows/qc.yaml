@@ -1,0 +1,10 @@
+name: QC
+
+on:
+  pull_request:
+
+jobs:
+  qc-just-say-yes:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo ok
