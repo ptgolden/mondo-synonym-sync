@@ -7,7 +7,7 @@ synonymtypedef: ABBREVIATION "abbreviation"
 id: MONDO:0000001
 name: alpha disease
 def: "alpha disease description" [PMID:1]
-synonym: "alpha syn" EXACT [DOID:1, NCIT:C1]
+synonym: "alpha syn" EXACT [DOID:1, NCIT:C1, MGI:1]
 
 [Term]
 id: MONDO:0000002
