@@ -30,12 +30,14 @@ uv run pytest
 ## Test the workflow end-to-end
 
 Push to a sandbox GitHub repo, then in Settings → Actions → General:
-allow read/write workflow permissions and allow Actions to open PRs. Set
-a `GH_TOKEN` secret (or swap to `GITHUB_TOKEN` in the workflow). Then
-Actions → "Update Synonyms Evidence" → Run workflow.
+allow read/write workflow permissions and allow Actions to open PRs.
+The workflow currently uses `GITHUB_TOKEN` for the sandbox (swap back to
+`GH_TOKEN` before this lands in Mondo, or PRs won't trigger downstream
+workflows). Then Actions → "Update Synonyms Evidence" → Run workflow.
 
-With the Makefile as a no-op stub the workflow will PASS but
-peter-evans will skip the PR (no diff to ship). To exercise the full
-PR + artifact-link path, edit the stub to produce a deterministic
-change to `mondo-edit.obo` (e.g. a one-line `sed -i` that adds an xref
-to one of the synonyms), push, and redispatch.
+The Makefile stub applies an idempotent `sed` that adds an `MGI:1` xref
+to one synonym, mimicking what the real Mondo `update-synonyms-sync`
+target does (mutate `mondo-edit.obo` in place). peter-evans then opens a
+PR with that diff, body = QC summary, full report attached as artifact.
+**Don't merge the PR** — if you do, the porcelain file gains the xref
+and the sed becomes a no-op on subsequent dispatches.
